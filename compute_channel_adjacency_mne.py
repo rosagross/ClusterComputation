@@ -41,4 +41,5 @@ dtype = [('label', 'O'), ('neighlabel', 'O')]
 fields = np.empty((1, len(ch_names)), dtype=dtype)
 fields['label'] = ch_names
 fields['neighlabel'] = neighbours
-savemat('biosemi32_neighb_struct.mat', {'neighbours': fields})
+
+savemat('channel_adjacency.mat', {'neighbours': fields})
