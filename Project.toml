@@ -1,0 +1,8 @@
+[deps]
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+MAT = "23992714-dd62-5051-b70f-ba57cb901cac"
+MixedModelsPermutations = "647c4018-d7ef-4d03-a0cc-8889a722319e"
+UnfoldMakie = "69a5ce3b-64fb-4f22-ae69-36dd4416af2a"
+UnfoldMixedModels = "019ae9e0-8363-565c-86e5-97a5a2fe84f4"
+UnfoldSim = "ed8ae6d2-84d3-44c6-ab46-0baf21700804"
