@@ -1,2 +1,7 @@
 [deps]
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
 MAT = "23992714-dd62-5051-b70f-ba57cb901cac"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+PyMNE = "6c5003b2-cbe8-491c-a0d1-70088e6a0fd6"
+UnfoldSim = "ed8ae6d2-84d3-44c6-ab46-0baf21700804"
