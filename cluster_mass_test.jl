@@ -1,3 +1,4 @@
+using UnfoldMixedModels
 
 # """
 #     find_connected_clusters_2d(data::AbstractMatrix, adjacency::AbstractMatrix{Bool}, threshold::Real)
@@ -178,153 +179,24 @@ function spatiotemporal_cluster_pvalues(
     end
     
     # Compute p-values for each observed cluster
-    pvalues = ones(n_channels, n_times)  # Initialize with 1.0 (non-significant)
-    
-    for (cluster, cluster_stat) in zip(obs_clusters, obs_cluster_stats)
+    pvalues = ones(n_channels, n_times)    # Initialize with 1.0 (non-significant)
+    cluster_ids = zeros(Int, n_channels, n_times)  # 0 = no cluster; +k = k-th pos cluster; -k = k-th neg cluster
+
+    n_pos = length(pos_clusters)
+
+    for (i, (cluster, cluster_stat)) in enumerate(zip(obs_clusters, obs_cluster_stats))
         # Count how many permutations had a max cluster stat >= this cluster's stat
         n_extreme = sum(null_max_stats .>= cluster_stat)
         cluster_pvalue = (n_extreme + 1) / (n_permutations + 1)
-        
-        # Assign p-value to all samples in this cluster
+
+        cluster_id = i <= n_pos ? i : -(i - n_pos)
+
         for idx in cluster
             pvalues[idx] = cluster_pvalue
+            cluster_ids[idx] = cluster_id
         end
     end
-    
-    return pvalues
+
+    return pvalues, cluster_ids
 end
 
-
-
-
-"""
-    lmm_permutations(rng::AbstractRNG,model::UnfoldLinearMixedModel,data::AbstractArray{<:Real,3},coefficient::Int;kwargs...)
-
-Calculates permutations of a UnfoldLinearMixedModel object
-
-# Arguments
-- `rng::AbstractRNG`: An RNG-generator for reproducibility
-- `model::UnfoldLinearMixedModel`: The fitted UnfoldLinearMixedModel to calculate the permutations of
-- `data::AbstractArray{<:Real,3}`: The data with ch x time x trials
-- `coefficient:Int`: The coefficient to test the null of
-
-# Keyword arguments
-- `n_permutations::Int = 500`: Number of permutations. Based on other permutation work, 500 should be a reasonable number. Methods based on e.g. tail-approximation are not yet available
-- `lmm_statistic = :z`: What statistic to extract, could also be e.g. `β`
-- `time_selection = 1:size(data, 2)`: Possibility to calculate permutations on a subset of time points
-
-# Returns
-- `result::Array` : Returns the full permutation Array with ch x timepoints x permutations for the coefficient-of-interest
-"""
-function lmm_permutations(
-    rng::AbstractRNG,
-    model,
-    data::AbstractArray{<:Real,3},
-    coefficient::Int;
-    n_permutations = 500,
-    lmm_statistic = :z,
-    time_selection = 1:size(data, 2),
-)
-    permdata = Array{Float64}(undef, size(data, 1), length(time_selection), n_permutations)
-
-    Xs = UnfoldMixedModels.prepare_modelmatrix(model)
-
-    mm_outer = UnfoldMixedModels.LinearMixedModel_wrapper(
-        Unfold.formulas(model),
-        data[1, 1, :],
-        Xs,
-    )
-    mm_outer.optsum.maxtime = 0.1 # 
-
-    chIx = 1 # for now we only support 1 channel anyway
-    #
-    #p = Progress(length(time_selection))
-
-    @assert(
-        coefficient <= size(coef(mm_outer))[end],
-        "chosen coefficient was larger than available coefficients"
-    )
-    #Threads.@threads for tIx =1:length(time_selection)
-    #@showprogress "Processing Timepoints" for 
-    for chIx = 1:size(data, 1)
-        #Threads.@threads 
-        for tIx = 1:length(time_selection)
-
-            # splice in the correct dataa for residual calculation
-            mm = deepcopy(mm_outer)
-            mm.y .= data[chIx, time_selection[tIx], :]
-
-            # set the previous calculated model-fit
-            θ = Vector(modelfit(model).θ[time_selection[tIx]])
-            @debug size(θ)
-            MixedModels.updateL!(MixedModels.setθ!(mm, θ))
-
-            # get the coefficient 
-            H0 = coef(mm)
-            # set the one of interest to 0
-            H0[coefficient] = 0
-            # run the permutation
-
-            permutations = undef
-            Logging.with_logger(NullLogger()) do   # remove NLopt warnings  
-                permutations = permutation(
-                    deepcopy(rng), # important here is to set the same seed to keep flip all time-points the same
-                    n_permutations,
-                    mm;
-                    β = H0,
-                    progress = false,
-                    #blup_method = MixedModelsPermutations.olsranef,
-                ) # constant rng to keep autocorr & olsranef for singular models
-            end
-
-            # extract the test-statistic
-
-            permdata[chIx, tIx, :] =
-                get_lmm_statistic(model, permutations, coefficient, lmm_statistic)
-
-            #next!(p)
-        end # end for
-    end
-    return permdata
-end
-
-
-
-
-
-"""
-    get_lmm_statistic(model::UnfoldLinearMixedModel, coefficient::Int, lmm_statistic)
-    get_lmm_statistic(model,permutations::MixedModelFitCollection, coefficient, lmm_statistic)
-    
-Returns the field `lmm_statistic` of the `coefpvalues` table output of the `permutations`-FitCollection only of the coefficient `coefnames(formulas(model))[1][coefficient]`
-
-# Arguments
-- `model`: typically an `UnfoldMixedModel` or similar
-- `permutations::MixedModelFitCollection`: the output of `modelfit(model)`
-- `coefficient::Int`: the coefficient to choose (a fixed effect)
-- `lmm_statistic::Symbol`: The statistic to extact, tyically either `β` or `z`
-
-
-# Returns
-- `result::Vector` : A vector of the extracted `lmm_statistic`
-
-"""
-function get_lmm_statistic(
-    model,
-    permutations::MixedModelsPermutations.MixedModels.MixedModelFitCollection,
-    coefficient::Int,
-    lmm_statistic,
-)
-    [
-        getproperty(m, lmm_statistic) for m in permutations.coefpvalues if
-        String(m.coefname) == Unfold.coefnames(Unfold.formulas(model))[1][coefficient]
-    ]
-
-end
-function get_lmm_statistic(model::UnfoldLinearMixedModel, coefficient::Int, lmm_statistic)
-    return get_lmm_statistic(model, modelfit(model), coefficient, lmm_statistic)
-    #    r = coeftable(m)
-    #    r = subset(r, :group => (x -> isnothing.(x)), :coefname => (x -> x .!== "(Intercept)"))
-    #    tvals = abs.(r.estimate ./ r.stderror)
-    #    return tvals
-end
