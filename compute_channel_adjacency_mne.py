@@ -23,6 +23,7 @@ neighbours = []
 labels = []
 
 ch_names = np.array(ch_names)
+ch_names = np.where(ch_names == 'FPz', 'Fpz', ch_names)
 
 # put the neighbour for each channel in separate lists
 for i, ch in enumerate(ch_names):
@@ -32,14 +33,18 @@ for i, ch in enumerate(ch_names):
     current_neighb_idx = neighbour_idx[current_label_idx]
     neighb_labels = ch_names[current_neighb_idx]
 
+    # delete the target channel from the list
+    mask = neighb_labels != ch
+    result = neighb_labels[mask]
+
     # save in dict
     neighbours.append(neighb_labels)
 
 
 # save them into .mat file
-dtype = [('label', 'O'), ('neighlabel', 'O')]
+dtype = [('label', 'O'), ('neighblabel', 'O')]
 fields = np.empty((1, len(ch_names)), dtype=dtype)
 fields['label'] = ch_names
-fields['neighlabel'] = neighbours
+fields['neighblabel'] = neighbours
 
 savemat('channel_adjacency.mat', {'neighbours': fields})
