@@ -38,8 +38,8 @@ function find_connected_clusters_2d(
         error("Adjacency matrix size ($(size(adjacency))) must match number of channels ($n_channels)")
     end
     
-    # Find all samples exceeding threshold
-    above_threshold = abs.(data) .>= threshold
+    # Find all samples exceeding threshold 
+    above_threshold = data .>= threshold
     
     # Track which samples have been assigned to clusters
     visited = falses(size(data))
@@ -69,7 +69,7 @@ function find_connected_clusters_2d(
             
             visited[current] = true
             push!(cluster, current)
-            cluster_sum += abs(data[current])
+            cluster_sum += data[current]
             
             # Find neighbors (spatiotemporal connectivity)
             ch, t = Tuple(current)
@@ -155,16 +155,21 @@ function spatiotemporal_cluster_pvalues(
     n_channels, n_times = size(observed)
     n_permutations = size(permuted, 3)
     
-    # Find clusters in observed data
-    obs_clusters, obs_cluster_stats = find_connected_clusters_2d(observed, adjacency, threshold)
-    
+    # Find positive and negative clusters 
+    pos_clusters, pos_cluster_stats = find_connected_clusters_2d(observed, adjacency, threshold)
+    neg_clusters, neg_cluster_stats = find_connected_clusters_2d(-observed, adjacency, threshold)
+    obs_clusters = [pos_clusters; neg_clusters]
+    obs_cluster_stats = [pos_cluster_stats; neg_cluster_stats]
+
     # Build null distribution of maximum cluster statistics
     null_max_stats = zeros(n_permutations)
-    
+
     for perm_idx in 1:n_permutations
         perm_data = permuted[:, :, perm_idx]
-        _, perm_cluster_stats = find_connected_clusters_2d(perm_data, adjacency, threshold)
-        
+        _, pos_perm_stats = find_connected_clusters_2d(perm_data, adjacency, threshold)
+        _, neg_perm_stats = find_connected_clusters_2d(-perm_data, adjacency, threshold)
+        perm_cluster_stats = [pos_perm_stats; neg_perm_stats]
+
         if !isempty(perm_cluster_stats)
             null_max_stats[perm_idx] = maximum(perm_cluster_stats)
         else
